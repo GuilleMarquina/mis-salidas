@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#d4271c">
+  <title>Mis salidas</title>
+  <meta name="description" content="Registro de las salidas de cada guardia.">
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Mis salidas">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <style>
+    :root { --senal: #d4271c; --fondo: #f2f1f0; --tinta: #18181a; --suave: #6b686b; --superficie: #fff; }
+    @media (prefers-color-scheme: dark) {
+      :root { --senal: #ff5446; --fondo: #101012; --tinta: #efedec; --suave: #9c999e; --superficie: #1a1a1d; }
+    }
+    html, body { margin: 0; height: 100%; background: var(--fondo); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    /* La franja de la barra de estado (muesca) toma el fondo de la app; la app ocupa el resto. */
+    body { display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); box-sizing: border-box; }
+    iframe { flex: 1; width: 100%; border: 0; background: var(--fondo); }
+    .capa {
+      position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; padding: 24px; box-sizing: border-box; background: var(--fondo); color: var(--tinta); text-align: center;
+    }
+    .capa[hidden] { display: none; }
+    .capa img { width: 96px; height: 96px; border-radius: 22px; }
+    .capa p { margin: 0; max-width: 340px; line-height: 1.45; }
+    .capa .nota { color: var(--suave); font-size: .9rem; }
+    .botones { display: grid; gap: 10px; width: 100%; max-width: 320px; }
+    .botones a, .botones button {
+      display: block; min-height: 48px; line-height: 48px; border-radius: 12px; font: inherit; font-weight: 700;
+      text-decoration: none; border: 1px solid var(--senal); cursor: pointer;
+    }
+    .principal { background: var(--senal); color: #fff; }
+    .suave { background: var(--superficie); color: var(--senal); }
+    .puntos::after { content: ''; animation: puntos 1.2s steps(4) infinite; }
+    @keyframes puntos { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+    @media (prefers-reduced-motion: reduce) { .puntos::after { animation: none; content: '…'; } }
+  </style>
+</head>
+<body>
+  <iframe id="app" title="Mis salidas"></iframe>
+
+  <div class="capa" id="cargando">
+    <img src="icono-192.png" alt="">
+    <p class="puntos">Cargando</p>
+  </div>
+
+  <div class="capa" id="ayuda" hidden>
+    <img src="icono-192.png" alt="">
+    <p><strong>La app no termina de abrir.</strong></p>
+    <p class="nota" id="ayuda-texto">Hay que tener abierta la sesión de Google con tu cuenta y, la primera vez, autorizar la app.
+      Ábrela en el navegador, entra con tu cuenta y vuelve aquí.</p>
+    <div class="botones">
+      <a class="principal" id="abrir-navegador" target="_blank" rel="noopener">Abrir en el navegador</a>
+      <button class="suave" id="reintentar">Reintentar</button>
+    </div>
+  </div>
+
+  <script>
+    // Dirección de la app (despliegue /exec de Apps Script). Si cambia el despliegue, solo cambia esto.
+    const APP = 'https://script.google.com/macros/s/AKfycbyP6CgSLfYVYJWKASldkOdmU7h1Xb5l3uMZwC29peO7J4dg2YZz4a8hca7hOht5GWoJEQ/exec';
+    // La app corre en un marco de Google (…googleusercontent.com): solo se atienden mensajes de ahí.
+    const ORIGEN_APP = /^https:\/\/[a-z0-9-]+[.-]script\.googleusercontent\.com$/;
+    const ESPERA_MS = 20000;
+
+    const marco = document.getElementById('app');
+    const cargando = document.getElementById('cargando');
+    const ayuda = document.getElementById('ayuda');
+    document.getElementById('abrir-navegador').href = APP;
+    let lista = false, temporizador = null;
+
+    function cargar() {
+      lista = false;
+      ayuda.hidden = true;
+      cargando.hidden = false;
+      marco.src = APP;
+      clearTimeout(temporizador);
+      // Si la app no avisa de que ha arrancado, casi siempre es la sesión de Google o la primera autorización,
+      // que Google no deja hacer dentro de otra página.
+      temporizador = setTimeout(() => {
+        if (lista) return;
+        cargando.hidden = true;
+        if (!navigator.onLine) {
+          document.getElementById('ayuda-texto').textContent = 'No hay conexión. Comprueba los datos o el wifi y reintenta.';
+        }
+        ayuda.hidden = false;
+      }, ESPERA_MS);
+    }
+    document.getElementById('reintentar').onclick = cargar;
+
+    window.addEventListener('message', e => {
+      if (!ORIGEN_APP.test(e.origin) || !e.data || typeof e.data !== 'object') return;
+      if (e.data.misSalidas === 'listo') {
+        lista = true;
+        clearTimeout(temporizador);
+        cargando.hidden = true;
+        ayuda.hidden = true;
+      }
+    });
+
+    cargar();
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    }
+  </script>
+</body>
+</html>
